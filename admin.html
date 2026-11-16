@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Orders – Evergreen &amp; Ember</title>
+<style>
+:root{--pine:#0e2a21;--berry:#b3263e;--gold:#f2c879;--bg:#f6f8f7;--ink:#10201a;--mut:#5d6f67;--card:#fff;--line:rgba(16,32,26,.12)}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1914;--ink:#eaf1ed;--mut:#9fb3a9;--card:#12261e;--line:rgba(234,241,237,.14)}}
+*{box-sizing:border-box;margin:0}body{font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--pine);color:#fff;padding:14px 20px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+input,select,button{font:inherit;padding:.6rem .9rem;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button{cursor:pointer;background:var(--berry);color:#fff;border:0;font-weight:600}button.o{background:transparent;color:inherit;border:1px solid currentColor}
+.o2{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.ord{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:10px;font-size:.93rem}.mut{color:var(--mut)}
+.pill{padding:.2rem .7rem;border-radius:99px;background:var(--gold);color:#3a2705;font-size:.8rem;font-weight:600}
+#login{max-width:340px;margin:80px auto;display:grid;gap:12px;padding:0 16px}
+</style></head><body>
+<div id="login" hidden><h2>Admin login</h2><input id="pw" type="password" placeholder="Password" autocomplete="current-password"><button id="lb">Log in</button><p id="le" class="mut"></p></div>
+<div id="app" hidden><header><b>Orders</b><span><button class="o" id="rf">Refresh</button> <button class="o" id="lo">Log out</button></span></header>
+<main><div class="o2"><select id="fl"><option value="">All statuses</option></select><input id="qs" placeholder="Search name, email or order ID"></div><div id="list"></div></main></div>
+<script>
+const ST=["pending_payment","paid","cod_pending","processing","shipped","delivered","cancelled"],$=s=>document.querySelector(s);
+const h=(t,a={},...k)=>{const e=document.createElement(t);Object.assign(e,a);k.flat().forEach(c=>e.append(c));return e};
+const m=c=>"$"+(c/100).toFixed(2);let all=[];
+ST.forEach(s=>$("#fl").append(h("option",{value:s,textContent:s.replace("_"," ")})));
+async function api(p,o){const r=await fetch(p,o&&{...o,headers:{"Content-Type":"application/json"}});if(r.status===401){$("#app").hidden=true;$("#login").hidden=false;throw 0}return r.json()}
+async function load(){all=await api("/api/admin/orders");$("#login").hidden=true;$("#app").hidden=false;draw()}
+function draw(){const f=$("#fl").value,q=$("#qs").value.toLowerCase();const l=$("#list");l.replaceChildren();
+ const rows=all.filter(o=>(!f||o.status===f)&&(`${o.id} ${o.customer.first} ${o.customer.last} ${o.customer.email}`.toLowerCase().includes(q)));
+ if(!rows.length)l.append(h("p",{className:"mut",textContent:"No orders yet."}));
+ rows.forEach(o=>{const c=o.customer,sel=h("select");ST.forEach(s=>sel.append(h("option",{value:s,selected:s===o.status,textContent:s.replace("_"," ")})));
+  sel.onchange=async()=>{await api("/api/admin/orders/"+o.id,{method:"PATCH",body:JSON.stringify({status:sel.value})});o.status=sel.value};
+  l.append(h("div",{className:"ord"},h("div",{className:"top"},h("b",{textContent:`${o.id} · ${m(o.total)}`}),h("span",{className:"pill",textContent:o.method==="cod"?"Cash on delivery":"Card"}),sel),
+   h("div",{className:"grid"},
+    h("div",{},h("b",{textContent:"Customer"}),h("br"),`${c.first} ${c.last}`,h("br"),c.email,h("br"),c.phone),
+    h("div",{},h("b",{textContent:"Deliver to"}),h("br"),c.addr,h("br"),`${c.city}, ${c.zip}`,h("br"),c.country,c.notes?h("div",{className:"mut",textContent:"Note: "+c.notes}):""),
+    h("div",{},h("b",{textContent:"Items"}),...o.items.map(i=>h("div",{textContent:`${i.q} × ${i.name}`})),h("div",{className:"mut",textContent:new Date(o.created_at).toLocaleString()})))))})}
+$("#lb").onclick=async()=>{const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:$("#pw").value})});r.ok?load():$("#le").textContent="Wrong password."};
+$("#pw").onkeydown=e=>e.key==="Enter"&&$("#lb").click();$("#rf").onclick=load;$("#fl").onchange=$("#qs").oninput=draw;
+$("#lo").onclick=async()=>{await fetch("/api/admin/logout",{method:"POST"});location.reload()};
+load().catch(()=>{});
+</script></body></html>
